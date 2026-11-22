@@ -1089,7 +1089,7 @@ $("ov").innerHTML=`<div class="banner" style="font-size:34px">Difficulty</div><d
 $("ov").querySelectorAll(".dbtn").forEach(b=>b.onclick=()=>{AIL=+b.dataset.l;try{localStorage.setItem("nw-ail",AIL)}catch(e){}NET.mode=null;init()});$("dback").onclick=()=>startScreen()}
 const saveName=()=>{const v=($("nm")&&$("nm").value||"").trim().slice(0,16);myName=v||"Player";try{localStorage.setItem("nw-name",myName)}catch(e){}};
 function updLobby(){const R=NET.room,el=$("lb");if(!R||!el)return;const ps=R.peers(),wait=ps.filter(p=>p.presence&&p.presence.st=="waiting").length,on=ps.length;el.textContent=NET.seeking?`Looking for an opponent… (${on} here, ${wait} waiting)`:`${on} here now${wait?`, ${wait} waiting for a match`:""}`;const po=$("po");if(po)po.disabled=false}
-function seek(){const R=NET.room;if(!R||NET.roomErr){const el=$("lb");if(el){el.textContent=NET.roomTried?"Online play can't connect for this account. Sign in to Claude with the email the game was shared to (a direct email invite, not a public link) and reload. In the Claude phone app, try opening the link in your phone's browser."+(NET.roomErr?" ("+NET.roomErr+")":""):"Still connecting… try again in a few seconds.";el.style.color="#fca5a5"}return}NET.seeking=true;R.presence({st:"waiting",name:myName,at:Date.now(),m:null,w:null}).catch(()=>{});$("ov").innerHTML=`<div class="banner">Searching…</div><div class="stat" id="lb"></div><button id="cs" class="btn red">Cancel</button>`;$("cs").onclick=()=>{NET.seeking=false;R.presence({st:"idle",m:null,w:null}).catch(()=>{});startScreen()};updLobby();tryPair()}
+function seek(){const R=NET.room;if(!R||NET.roomErr){const el=$("lb");if(el){el.textContent=NET.roomTried&&!NET.inC?"Online play can't connect right now. Check your internet connection and reload the page.":NET.roomTried?"Online play can't connect for this account. Sign in to Claude with the email the game was shared to (a direct email invite, not a public link) and reload. In the Claude phone app, try opening the link in your phone's browser."+(NET.roomErr?" ("+NET.roomErr+")":""):"Still connecting… try again in a few seconds.";el.style.color="#fca5a5"}return}NET.seeking=true;R.presence({st:"waiting",name:myName,at:Date.now(),m:null,w:null}).catch(()=>{});$("ov").innerHTML=`<div class="banner">Searching…</div><div class="stat" id="lb"></div><button id="cs" class="btn red">Cancel</button>`;$("cs").onclick=()=>{NET.seeking=false;R.presence({st:"idle",m:null,w:null}).catch(()=>{});startScreen()};updLobby();tryPair()}
 function tryPair(){const R=NET.room;if(!R||!NET.seeking||NET.pairing)return;const ps=R.peers(),me=ps.find(p=>p.sameTab);if(!me)return;
 const inv=ps.find(p=>!p.sameTab&&p.presence&&p.presence.st=="waiting"&&p.presence.w===me.peer&&typeof p.presence.m=="string");
 if(inv){startPair(inv.presence.m,me,inv);return}
@@ -1111,7 +1111,42 @@ else{NET.unsub.push(g.on("x",m=>{if(m.sameTab||m.peer!==NET.oppPeer)return;NET.h
 if(d.t=="leave")back("Your opponent left the match.")}));
 NET.unsub.push(g.on("s",m=>{if(!m.sameTab&&m.peer===NET.oppPeer){NET.heard=performance.now();NET.awayT=0;try{onSnap(m.data)}catch(e){}}}));NET.unsub.push(g.on("m",m=>{if(!m.sameTab&&m.peer===NET.oppPeer){NET.heard=performance.now();NET.awayT=0;try{onMeta(m.data)}catch(e){}}}));
 timer=setTimeout(()=>{if(!started)back("Match fell through. Try again.")},25000)}}
-(async()=>{let R=null;try{R=await claude.use("room")}catch(e){}NET.roomTried=true;NET.room=R;if(R)try{R.onConnection(()=>{},e=>{NET.roomErr=e&&e.code||"error"})}catch(e){}if(!R){const el=$("lb");if(el)el.textContent="Online play can't connect for this account. You need to be signed in to Claude with the email the game was shared to (a direct email invite, not a public link). In the Claude phone app, try the phone's browser instead.";return}
+// ---- online transport: Claude's "room" inside Claude, Supabase Realtime (+ direct WebRTC for matches) everywhere else ----
+const SB_URL="https://cxqjhbtwyfzmtogczrgh.supabase.co",SB_KEY="sb_publishable_ttOCBN2rk35ASrvf53b7zg__h0MZgb6";
+function loadSB(){return new Promise((res,rej)=>{if(window.supabase&&window.supabase.createClient)return res(window.supabase);const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js";s.onload=()=>window.supabase?res(window.supabase):rej(new Error("load"));s.onerror=()=>rej(new Error("load"));document.head.appendChild(s)})}
+async function sbRoom(){const lib=await loadSB(),sb=lib.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false},realtime:{params:{eventsPerSecond:100}}});
+const me=("p"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4)).toLowerCase();let connErr=null;
+function chan(name,game){const ch=sb.channel("nw-"+name,{config:{presence:{key:me},broadcast:{self:false,ack:false}}});let pres={},subd=false,known=new Map();const peerCbs=[],msgCbs={};
+const list=()=>{const st=ch.presenceState()||{};return Object.keys(st).map(k=>({peer:k,sameTab:k===me,presence:Object.assign({},...(st[k]||[]).map(m=>{const o={...m};delete o.presence_ref;return o}))}))};
+const fire=(t,m)=>{for(const f of(msgCbs[t]||[]).slice())try{f(m)}catch(e){}};
+// direct peer-to-peer data channels for match traffic; Supabase relays until (or unless) they open
+let pc=null,dR=null,dU=null,other=null,ice=[],offerT=null,rtcDead=false;
+const sig=o=>ch.send({type:"broadcast",event:"g",payload:{p:me,o}}).catch(()=>{});
+const onDc=dc=>{if(dc.label=="u")dU=dc;else dR=dc;dc.onmessage=e=>{let o;try{o=JSON.parse(e.data)}catch(_){return}fire(o.t,{peer:other,sameTab:false,data:o.d})}};
+const flushIce=()=>{for(const c of ice.splice(0))pc.addIceCandidate(c).catch(()=>{})};
+function rtc(o){if(pc||rtcDead||!game||!window.RTCPeerConnection)return;other=o;try{pc=new RTCPeerConnection({iceServers:[{urls:["stun:stun.l.google.com:19302","stun:stun.cloudflare.com:3478"]}]})}catch(e){rtcDead=true;return}
+pc.onicecandidate=e=>{if(e.candidate)sig({k:"ice",c:e.candidate.toJSON()})};pc.ondatachannel=e=>onDc(e.channel);
+pc.onconnectionstatechange=()=>{if(pc&&pc.connectionState=="failed")rtcDead=true};
+if(me<o){onDc(pc.createDataChannel("r",{ordered:true}));onDc(pc.createDataChannel("u",{ordered:false,maxRetransmits:0}));
+const send=()=>{if(pc.remoteDescription||rtcDead)return clearInterval(offerT);sig({k:"sdp",d:{type:pc.localDescription.type,sdp:pc.localDescription.sdp}})};
+pc.createOffer().then(d=>pc.setLocalDescription(d)).then(()=>{send();let n=0;offerT=setInterval(()=>{if(++n>6){clearInterval(offerT);return}send()},2500)}).catch(()=>{rtcDead=true})}}
+async function onSig(p,o){if(!game||rtcDead)return;if(!pc)rtc(p);if(!pc||p!==other)return;try{if(o.k=="sdp"){if(o.d.type=="offer"){if(!pc.remoteDescription){await pc.setRemoteDescription(o.d);flushIce();await pc.setLocalDescription(await pc.createAnswer())}if(pc.localDescription)sig({k:"sdp",d:{type:pc.localDescription.type,sdp:pc.localDescription.sdp}})}else if(!pc.remoteDescription){await pc.setRemoteDescription(o.d);flushIce()}}else if(o.k=="ice"){if(pc.remoteDescription)await pc.addIceCandidate(o.c);else ice.push(o.c)}}catch(e){}}
+ch.on("broadcast",{event:"d"},({payload:q})=>{if(q&&q.p!==me)fire(q.t,{peer:q.p,sameTab:false,data:q.d})});
+ch.on("broadcast",{event:"g"},({payload:q})=>{if(q&&q.p!==me&&q.o)onSig(q.p,q.o)});
+ch.on("presence",{event:"sync"},()=>{const now=new Map(list().map(p=>[p.peer,p])),joined=[...now.values()].filter(p=>!known.has(p.peer)),left=[...known.values()].filter(p=>!now.has(p.peer));known=now;
+if(game&&!pc){const o=[...now.keys()].find(k=>k!==me);if(o&&me<o)rtc(o)}for(const f of peerCbs.slice())try{f({joined,left})}catch(e){}});
+const api={peers:list,
+presence(o){pres={...pres,...o};return subd?ch.track(pres):Promise.resolve()},
+onPeers(f){peerCbs.push(f);return()=>{const i=peerCbs.indexOf(f);if(i>=0)peerCbs.splice(i,1)}},
+on(t,f){(msgCbs[t]=msgCbs[t]||[]).push(f);return()=>{const a=msgCbs[t],i=a.indexOf(f);if(i>=0)a.splice(i,1)}},
+emit(t,d){const s=JSON.stringify({t,d}),dc=t=="s"&&dU&&dU.readyState=="open"?dU:dR&&dR.readyState=="open"?dR:null;
+if(dc&&dc.bufferedAmount<1e6){try{dc.send(s);return Promise.resolve()}catch(e){}}return ch.send({type:"broadcast",event:"d",payload:{t,p:me,d}}).catch(()=>{})},
+leave(){clearInterval(offerT);try{if(pc)pc.close()}catch(e){}pc=null;try{sb.removeChannel(ch)}catch(e){}},
+onConnection(ok,bad){api._bad=bad},direct:()=>!!(dR&&dR.readyState=="open")};
+const ready=new Promise((res,rej)=>{const to=setTimeout(()=>rej(new Error("timeout")),15000);ch.subscribe(st=>{if(st=="SUBSCRIBED"){subd=true;clearTimeout(to);if(Object.keys(pres).length)ch.track(pres).catch(()=>{});res(api)}else if(st=="CHANNEL_ERROR"||st=="TIMED_OUT"){subd=false;if(api._bad)api._bad({code:st})}})});
+return ready}
+const lobby=await chan("lobby",false);lobby.join=name=>chan(name,true);return lobby}
+(async()=>{let R=null;const inC=typeof claude!="undefined"&&!!claude&&!!claude.use;NET.inC=inC;try{R=inC?await claude.use("room"):await sbRoom()}catch(e){}NET.roomTried=true;NET.room=R;if(R)try{R.onConnection(()=>{},e=>{NET.roomErr=e&&e.code||"error"})}catch(e){}if(!R&&!inC){const el=$("lb");if(el)el.textContent="Online play can't connect right now. Check your internet connection and reload the page.";return}if(!R){const el=$("lb");if(el)el.textContent="Online play can't connect for this account. You need to be signed in to Claude with the email the game was shared to (a direct email invite, not a public link). In the Claude phone app, try the phone's browser instead.";return}
 R.onPeers(()=>{updLobby();tryPair()});R.presence({st:"idle",name:myName}).catch(()=>{});updLobby()})();
 addEventListener("resize",size);
 size();init();startScreen();requestAnimationFrame(loop);

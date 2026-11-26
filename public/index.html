@@ -511,7 +511,7 @@ for(const q of[0,1]){const n=P[q].domD||0,need=n==0?300:360+120*n;if(TT[q]>=need
 if(!otDone&&T>=OT){otDone=1;for(const u of U)if(u.D.sp>0){u.hp=0;fx.push({k:"ring",x:u.x,y:u.y-.3,r:.6,t:.6,T:.6,col:"#fde047"})}U=U.filter(u=>u.hp>0);PJ=[];zones=[];picked=null}
 if(T>=nt){nt+=1;for(const s of[0,1])P[s].m+=income(s)*ECO/20;for(const u of U)if(u.k=="can"&&u.hp>0)canSync(u)} // income: the map pays every 20s; like Line Wars it's paid in 1-second slices here
 for(const s of[0,1])for(const b of P[s].b){b.t-=DT;if(b.t<=0){const B=BLD[b.i];b.t=B.per;const k=B.u[b.alt%B.u.length];b.alt++;for(let j=0;j<B.n;j++)mkU(k,s,b.x+(j-.5*(B.n-1))*.35,b.y)}}
-aiT-=DT;if(aiT<=0){aiT=P[1].lvl>=4&&INS.fast?.5:1.5;if(NET.mode!="host")ai()}
+aiT-=DT;if(aiT<=0){aiT=P[1].lvl>=4?(INS.fast?.5:INS.think||1.5):1.5;if(NET.mode!="host")ai()}
 const G=new Map();for(const u of U)if(u.hp>0){const key=(u.x|0)+(u.y|0)*16;(G.get(key)||G.set(key,[]).get(key)).push(u)}
 AL=[[],[]];DET=[[],[]];GS=[[],[]];TN=[[],[]];for(const u of U)if(u.hp>0){AL[u.s].push(u);if(u.tauntT>T)TN[u.s].push(u);const a=u.D.ab;if(a.det)DET[u.s].push(u);if(a.gs)GS[u.s].push(u)}
 for(const u of U){if(u.hp<=0)continue;const D=u.D;
@@ -588,15 +588,15 @@ const nearMe=Math.abs(best.y-CORE_Y[s])<13,shaky=!core||core.hp+core.sh<(core.mh
 const go=(bb>0&&bv>=bb*.8)||(T>180&&nearMe&&shaky&&bv>=1100)||(nearMe&&bv>=2600)||bv>=4500;if(go)launchNuke(s,best.x,best.y)}
 function aiDefend(s,inc){if(P[s].ruins.length&&!otDone){const c=rbCost(s),L0=P[s].lvl||0;if(P[s].m>=c&&(L0>=2||Math.random()<.3)&&c<=Math.max(1200,income(s)*ECO/20*60)){rebuildCan(s,P[s].ruins[0]);return 1}}const p=P[s],L=p.lvl||0,core=U.find(u=>u.k=="core"&&u.s===s),cans=U.filter(u=>u.k=="can"&&u.s===s),threat=U.filter(u=>u.s===1-s&&u.hp>0&&u.D.sp&&Math.abs(u.y-CORE_Y[s])<15).length,
 hurt=!core||(core.hp+core.sh)<(core.mhp+core.msh)*.92||cans.length<2||cans.some(c=>c.hp<c.mhp*.7),defend=L>=2?threat>7||hurt:threat>3||hurt;
-for(const id of(cans.length?["cn","cg"]:["cg"])){const c=upCost(s,id);if(c==null)continue;if((defend||(T>360&&p.m>c*1.6))&&p.m>=c){buyUp(s,id);return 1}if(defend&&(L<2||hurt)&&p.m+inc*ECO/20*10>=c)return 2}return 0}
-function ai(s=1){const p=P[s];if(p.lvl==null)p.lvl=s===1?AIMAP[AIL]:2;if(p.lvl<0)return;if(p.lvl<=0)return aiEasy(s);aiNuke(s);const L=p.lvl,inc=income(s),o=1-s;if(L>=4&&aiInsane(s))return;
+for(const id of(cans.length?["cn","cg"]:["cg"])){const c=upCost(s,id);if(c==null)continue;const dx=L>=4&&INS.dfx;if((defend||(T>360&&p.m>c*1.6))&&p.m>=c*(dx&&defend?INS.dfx:1)){buyUp(s,id);return 1}if(!dx&&defend&&(L<2||hurt)&&p.m+inc*ECO/20*10>=c)return 2}return 0}
+function ai(s=1){const p=P[s];if(p.lvl==null)p.lvl=s===1?AIMAP[AIL]:2;if(p.lvl<0)return;if(p.lvl<=0)return aiEasy(s);aiNuke(s);const L=p.lvl,inc=income(s),o=1-s,pk=q=>1-Math.pow(1-q,(L>=4?(INS.fast?.5:INS.think||1.5):1.5)/1.5);if(L>=4&&aiInsane(s))return;
 if(p.fav==null)p.fav=ri(3);if(!p.open){const os=OPEN.filter(q=>q.f===p.fav);p.open=os[ri(os.length)].q.slice()}
 if(!p.sc||T-(p.scT||-99)>=[0,18,6,0,0][L]){p.sc=scout(s);p.scT=T}const sc=p.sc;
 // bosses: late, with spare gold, never in overtime
 if(T>(L>=3?240:300)&&!otDone&&p.m>=bossCost(s)+(L>=3?150:350)){const ks=BOSS.filter(k=>!bossAlive(s,k));if(ks.length){let k=ks[ri(ks.length)];if(L>=2&&sc.air>.35&&ks.includes("bp"))k="bp";else if(L>=2&&sc.small>.5&&ks.includes("bt"))k="bt";buyBoss(s,k)}}
 const d=aiDefend(s,inc);if(d==2)return;
 const mine=p.b.map(b=>BLD[b.i]),hasDet=mine.some(B=>btag(B).det),combat=mine.filter(B=>!btag(B).sup).length;
-const losing=L>=4&&INS.flood&&T<540&&!otDone&&TT[o]-TT[s]>25;p.losing=losing;const myV=armyVal(s),foeV=armyVal(o),safe=myV>=foeV*[0,.75,.65,.55,.55][L]||T<90,pressure=U.filter(u=>u.s===o&&u.hp>0&&u.D.sp>0&&Math.abs(u.y-CORE_Y[s])<12).length>5;
+const losing=L>=4&&INS.flood&&T<(INS.flT||540)&&!otDone&&TT[o]-TT[s]>(INS.flD||25);p.losing=losing;const myV=armyVal(s),foeV=armyVal(o),safe=myV>=foeV*[0,.75,.65,.55,.55][L]||T<90,pressure=U.filter(u=>u.s===o&&u.hp>0&&u.D.sp>0&&Math.abs(u.y-CORE_Y[s])<12).length>5;
 for(let n=0;n<6;n++){
  // 1) urgent: they have cloaked units and we cannot see them
  if(sc.cl&&!hasDet&&!p.b.some(b=>btag(BLD[b.i]).det)){let best=null;for(const B of BLD){if(!btag(B).det||btag(B).sup&&L<3)continue;if(food(s)+B.fd>SUP)continue;const sc2=(B.f==p.fav?1.5:1)/B.c;if(!best||sc2>best[0])best=[sc2,B]}
@@ -604,40 +604,54 @@ for(let n=0;n<6;n++){
  // 2) opening build
  if(p.open.length){const k=p.open[0];if(k=="tr"){if(p.m>=trCost(s)){buyTr(s);p.open.shift();continue}break}const B=BLD[BK[k]];if(p.m>=B.c){if(buy(s,B.i))p.open.shift();else p.open.shift();continue}break}
  // 3) economy: treasuries while it is safe to invest
- const trCap=[0,2+T/110,3+T/60,4+T/42,INS.eco?5+T/35:4+T/42][L],trMax=[0,7,11,14,INS.eco?18:14][L],ecoOk=losing?p.tr.length<1:L>=3?!pressure&&(safe||p.tr.length<4):!pressure&&safe;
- if(ecoOk&&p.tr.length<Math.min(trMax,trCap)&&combat>=2&&p.m>=trCost(s)&&freeSlot(s)>=0&&Math.random()<(L>=3?.9:.6)){buyTr(s);continue}
+ const trCap=[0,2+T/110,3+T/60,4+T/42,INS.eco?5+T/35:4+T/42][L],trMax=[0,7,11,14,INS.eco?18:14][L],behind=L>=4&&INS.cu&&food(s)<food(o)*INS.cu&&(!INS.cuS||(sc.topShare||0)>INS.cuS)&&p.tr.length>=(INS.cuT||1),ecoOk=behind?false:losing?p.tr.length<1:L>=3?!pressure&&(safe||p.tr.length<4):!pressure&&safe;
+ if(ecoOk&&p.tr.length<Math.min(trMax,trCap)&&combat>=2&&p.m>=trCost(s)&&freeSlot(s)>=0&&Math.random()<pk(L>=3?.9:.6)){buyTr(s);continue}
  // 4) supply cap: replace the weakest cheap spawner with something better (Hard+)
  if(L>=2&&!p.saveBoss&&food(s)+2>SUP&&p.m>=450){const w=p.b.filter(b=>BLD[b.i].c<=100).sort((a,b)=>BLD[a.i].c-BLD[b.i].c)[0];if(w){sell(s,w);continue}}
  // 5) pick the next spawner
- if(!p.want||T-(p.wantT||0)>25||(losing&&p.want.c>150)){p.want=pickB(s,sc,mine,inc,losing?Math.max(100,Math.min(150,p.m)):undefined);p.wantT=T}
+ if(!p.want||T-(p.wantT||0)>25||(losing&&p.want.c>150)||(behind&&p.want.c>Math.max(100,p.m))){p.want=pickB(s,sc,mine,inc,losing?Math.max(100,Math.min(150,p.m)):undefined);p.wantT=T}
  if(p.want&&p.m>=p.want.c){if(buy(s,p.want.i)){p.b[p.b.length-1].born=T;mine.push(p.want);p.want=null;continue}p.want=null}break}
 // building upgrades: Easy/Medium pick a path at random, Hard/Insane take the stronger one, best value spawners first
-if(!p.saveBoss&&!p.losing&&T>(L>=3?200:300)&&Math.random()<(L>=3?.5:.2)){const cnt={};for(const b of p.b){const k0=BLD[b.i].u[0];cnt[k0]=(cnt[k0]||0)+1}const ks=Object.keys(cnt).filter(k=>UOPT[k]&&!p.uu[k]&&cnt[k]>=(L>=3?2:3)).sort((a,b)=>cnt[b]-cnt[a]);for(const k0 of ks){const o=UOPT[k0],pp=L>=3?(o[0][3]>=o[1][3]?1:2):1+ri(2),c=uuCost(k0,pp);if(c<=p.m&&c<=inc*ECO/20*25+100){buyUU(s,k0,pp);break}}}
-if(L>=3&&!p.saveBoss&&food(s)+3>SUP&&Math.random()<.2){for(const k0 in p.uu2){if(p.uu3[k0])continue;const c=uu3CostS(s,k0);if(c!=null&&c<=p.m&&p.b.filter(b=>BLD[b.i].u[0]===k0).length>=4){buyUU3(s,k0);break}}}
-if(L>=2&&!p.saveBoss&&T>360&&Math.random()<.3){for(const k0 in p.uu){if(p.uu2[k0])continue;const c=uu2CostS(s,k0);if(c!=null&&c<=p.m&&c<=inc*ECO/20*40+200&&p.b.filter(b=>BLD[b.i].u[0]===k0).length>=3){buyUU2(s,k0);break}}}
+if(!p.saveBoss&&!p.losing&&T>(L>=3?200:300)&&Math.random()<pk(L>=3?.5:.2)){const cnt={};for(const b of p.b){const k0=BLD[b.i].u[0];cnt[k0]=(cnt[k0]||0)+1}const ks=Object.keys(cnt).filter(k=>UOPT[k]&&!p.uu[k]&&cnt[k]>=(L>=3?2:3)).sort((a,b)=>cnt[b]-cnt[a]);for(const k0 of ks){const o=UOPT[k0],pp=L>=3?(o[0][3]>=o[1][3]?1:2):1+ri(2),c=uuCost(k0,pp);if(c<=p.m&&c<=inc*ECO/20*25+100){buyUU(s,k0,pp);break}}}
+if(L>=3&&!p.saveBoss&&food(s)+3>SUP&&Math.random()<pk(.2)){for(const k0 in p.uu2){if(p.uu3[k0])continue;const c=uu3CostS(s,k0);if(c!=null&&c<=p.m&&p.b.filter(b=>BLD[b.i].u[0]===k0).length>=4){buyUU3(s,k0);break}}}
+if(L>=2&&!p.saveBoss&&T>360&&Math.random()<pk(.3)){for(const k0 in p.uu){if(p.uu2[k0])continue;const c=uu2CostS(s,k0);if(c!=null&&c<=p.m&&c<=inc*ECO/20*40+200&&p.b.filter(b=>BLD[b.i].u[0]===k0).length>=3){buyUU2(s,k0);break}}}
 // race attack/defense upgrades once a race has a few spawners
-if(!p.saveBoss&&!p.losing&&Math.random()<(L>=3?.6:.3)){const own=new Set(p.b.flatMap(b=>BLD[b.i].u)),fc=[0,0,0];for(const b of p.b)fc[BLD[b.i].f]++;const cs=UPG.filter(q=>{const c=upCost(s,q.id);if(c==null||c>p.m||c>inc*5+60)return false;return q.u?(T>300||p.b.filter(b=>BLD[b.i].u.some(k=>q.u.includes(k))).length>=3)&&q.u.some(k=>own.has(k)):fc[q.f]>=3});
+if(!p.saveBoss&&!p.losing&&Math.random()<pk(L>=3?.6:.3)){const own=new Set(p.b.flatMap(b=>BLD[b.i].u)),fc=[0,0,0];for(const b of p.b)fc[BLD[b.i].f]++;const cs=UPG.filter(q=>{const c=upCost(s,q.id);if(c==null||c>p.m||c>inc*5+60)return false;return q.u?(T>300||p.b.filter(b=>BLD[b.i].u.some(k=>q.u.includes(k))).length>=3)&&q.u.some(k=>own.has(k)):fc[q.f]>=3});
  if(cs.length)buyUp(s,cs.sort((a,b)=>(a.u?1:0)-(b.u?1:0))[L>=3?0:ri(cs.length)].id)}}
 function pickB(s,sc,mine,inc,cap){const p=P[s],L=p.lvl,share={tank:0,dps:0,cast:0,sup:0},flag={aoe:0,aa:0};let tot=0;
 for(const B of mine){const t=btag(B);share[t.role]+=B.fd;if(t.aoe)flag.aoe+=B.fd;if(t.aa)flag.aa+=B.fd;tot+=B.fd}
 const f=k=>tot?k/tot:0,goal={tank:.32,dps:.36,cast:.2,sup:.1},needAoe=.2+(sc.small>.45?.25:0),needAA=Math.min(.6,sc.air*1.1);
-const budget=cap!=null?cap:Math.max(150,inc*ECO/20*35+p.m*.5);let best=null,bw=-1;
+let budget=cap!=null?cap:Math.max(150,inc*ECO/20*(L>=4&&INS.bud?INS.bud:35)+p.m*.5);if(L>=4&&INS.cu&&food(s)<food(1-s)*INS.cu&&(!INS.cuS||(sc.topShare||0)>INS.cuS))budget=Math.min(budget,Math.max(100,p.m));let best=null,bw=-1;
 for(const B of BLD){if(food(s)+B.fd>SUP||B.c>budget)continue;const t=btag(B);if(t.sup&&(mine.filter(q=>!btag(q).sup).length<3||f(share.sup)>=.12))continue;
  let w=1+Math.max(0,goal[t.role]-f(share[t.role]))*6;
  if(t.aoe&&f(flag.aoe)<needAoe)w*=1+(needAoe-f(flag.aoe))*(L>=2?7:4);
  if(needAA>.1){if(t.aa&&f(flag.aa)<needAA)w*=1+(needAA-f(flag.aa))*8;else if(!t.aa&&f(flag.aa)<needAA*.6)w*=.5}
- const rate=Math.sqrt(40/B.per);if(sc.tot){let m=0;for(const i in sc.cb)m+=sc.cb[i]/sc.tot*MT(B.i,+i)/9;w*=Math.exp(m*rate*[0,.8,1.8,2.4,2.4][L])}
- if(L>=3&&sc.top!=null&&sc.topShare>.25)w*=Math.exp(MT(B.i,sc.top)/9*rate*sc.topShare*3.5);
+ const rate=Math.sqrt(40/B.per);if(sc.tot){let m=0;for(const i in sc.cb)m+=sc.cb[i]/sc.tot*MT(B.i,+i)/9;w*=Math.exp(m*rate*[0,.8,1.8,2.4,2.4][L]*(L>=4&&INS.ctr?INS.ctr:1))}
+ if(L>=3&&sc.top!=null&&sc.topShare>.25)w*=Math.exp(MT(B.i,sc.top)/9*rate*sc.topShare*3.5*(L>=4&&INS.hc?INS.hc:1));
  const same=mine.filter(q=>q===B).length;w/=1+[0,.2,.3,.4,.4][L]*same;
- w*=B.f==p.fav?(L>=3?1.15:1.6):1;w*=Math.min(1.6,.55+B.c/Math.max(80,inc*ECO/20*25));w*=Math.pow(B.c/B.fd/55,1.5*food(s)/SUP);w*=1+Math.random()*(L==1?.8:L==2?.35:.12);
+ w*=B.f==p.fav?(L>=4&&INS.favB?INS.favB:L>=3?1.15:1.6):1;w*=Math.min(1.6,.55+B.c/Math.max(80,inc*ECO/20*25));w*=Math.pow(B.c/B.fd/55,1.5*food(s)/SUP);w*=1+Math.random()*(L==1?.8:L==2?.35:.12);
+ if(L>=4&&INS.eff)w*=Math.pow(bEff(B),INS.eff);
  if(w>bw){bw=w;best=B}}return best}
+// raw combat value of a spawner per gold (hp x dps of what it spawns, per second), relative to the median spawner
+let BEF=null;function bEff(B){if(!BEF){const v=BLD.map(Q=>{let a=0;for(const k of Q.u){const U2=UT[k],d=(U2.w||[]).reduce((t,q)=>t+q[0]*(q[1]||1)/q[2],0);a+=Math.sqrt(U2.hp*Math.max(1,d))}return a/Q.per/Q.c}),m=v.slice().sort((a,b)=>a-b)[v.length>>1];BEF=v.map(x=>x/m)}return BEF[B.i]}
 // Insane: thinks 3x as often, plays aggressively (light economy), keeps re-scoring its own spawners against what you field and
 // sells the ones that are losing their matchup to buy better ones, syncs same-type spawners into bigger waves, buys race
 // upgrades early, and saves for bosses once its supply is full. Same rules, same gold and spawn timers as you.
-const INS={flood:1,sw:1,boss:1,fast:1,capup:0,eco:0,def:0,focus:1};function mScore(B,sc){if(!sc.tot)return 0;let m=0;for(const i in sc.cb)m+=sc.cb[i]/sc.tot*MT(B.i,+i)/9;return m*Math.sqrt(40/B.per)}
-function aiInsane(s){const p=P[s];if(p.fav==null)p.fav=ri(3);if(INS.focus&&!otDone&&T>150){const fc=p.b.filter(b=>BLD[b.i].f===p.fav).length;if(fc>=4)for(const id of["w"+p.fav,"a"+p.fav]){const c=upCost(s,id);if(c!=null&&p.m>=c&&c<=income(s)*ECO/20*60+200){buyUp(s,id);return true}}}if(INS.def&&!otDone){for(const id of[T>120?"cn":null,T>240?"cg":null]){if(!id)continue;const c=upCost(s,id);if(c!=null&&p.m>=c&&U.some(u=>u.k=="can"&&u.s===s)){buyUp(s,id);return true}}}const sc=p.sc||scout(s),capped=food(s)+3>SUP;p.saveBoss=false;
-// bosses: late, with spare gold, picked for the enemy army
-if(INS.boss&&(capped||T>540)&&T>300&&!otDone){const ks=BOSS.filter(k=>!bossAlive(s,k));if(ks.length){let k=ks.includes("bt")?"bt":ks.includes("gd")?"gd":ks.includes("bz")?"bz":"bp";if(sc.air>.3&&ks.includes("bp"))k="bp";else if(sc.small>.45&&ks.includes("bt"))k="bt";
+// tuned by simulation (Nov 2026): the old extras (fast thinking, swapping spawners, flood mode, boss hoarding, race focus) made Insane weaker than Hard; it now beats Hard
+const INS={tu:0,ups:0,eff:0,flood:0,sw:0,boss:0,fast:0,capup:0,eco:0,def:0,focus:0};function mScore(B,sc){if(!sc.tot)return 0;let m=0;for(const i in sc.cb)m+=sc.cb[i]/sc.tot*MT(B.i,+i)/9;return m*Math.sqrt(40/B.per)}
+function aiInsane(s){const p=P[s];if(p.fav==null)p.fav=ri(3);
+// race upgrades bought on value: a tier is worth it once the % boost times the gold invested in that race's spawners beats its price
+if(INS.ups&&!otDone&&!p.losing){const rv=[0,0,0];for(const b of p.b)rv[BLD[b.i].f]+=BLD[b.i].c;let best=null,bs=0;
+ for(const f of[0,1,2])for(const k of["w","a"]){const id=k+f,n=p.up[id]||0,c=upCost(s,id);if(c==null)continue;const g=k=="w"?ATKM[n+1]/ATKM[n]-1:DEFM[n]/DEFM[n+1]-1,sc=g*rv[f]*INS.ups/c;if(sc>bs){bs=sc;best=[id,c]}}
+ if(best&&bs>=1){if(p.m>=best[1]){buyUp(s,best[0]);return true}if(bs>=1.6){p.saveUp=1;return true}}}if(INS.focus&&!otDone&&T>150){const fc=p.b.filter(b=>BLD[b.i].f===p.fav).length;if(fc>=4)for(const id of["w"+p.fav,"a"+p.fav]){const c=upCost(s,id);if(c!=null&&p.m>=c&&c<=income(s)*ECO/20*60+200){buyUp(s,id);return true}}}if(INS.def&&!otDone){for(const id of[T>120?"cn":null,T>240?"cg":null]){if(!id)continue;const c=upCost(s,id);if(c!=null&&p.m>=c&&U.some(u=>u.k=="can"&&u.s===s)){buyUp(s,id);return true}}}// unit upgrades on its core spawners: the biggest investments (count x price) get tier 1, then 2, then 3, like a human committing to a unit
+if(INS.tu&&!otDone&&!p.losing&&T>INS.tu&&(!INS.tuCap||food(s)+3>SUP)){const inv={};for(const b of p.b){const k0=BLD[b.i].u[0];if(UOPT[k0])inv[k0]=(inv[k0]||0)+BLD[b.i].c}
+ const ks=Object.keys(inv).filter(k0=>inv[k0]>=(INS.tuMin||300)).sort((a,b)=>inv[b]-inv[a]).slice(0,INS.tuN||3),inc2=income(s)*ECO/20*60;
+ for(const k0 of ks){let c=null,f=null;if(!p.uu[k0]){const o=UOPT[k0],pp=o[0][3]>=o[1][3]?1:2;c=uuCost(k0,pp);f=()=>buyUU(s,k0,pp)}else if(!p.uu2[k0]){c=uu2CostS(s,k0);f=()=>buyUU2(s,k0)}else if(!p.uu3[k0]&&T>(INS.tu3||360)){c=uu3CostS(s,k0);f=()=>buyUU3(s,k0)}
+  if(c!=null&&c<=inv[k0]*(INS.tuR||1.2)&&c<=inc2*(INS.tuI||1.5)){if(p.m>=c){f();return true}p.saveUp=1;return true}}}
+const sc=p.sc||scout(s),capped=food(s)+3>SUP;p.saveBoss=false;
+if(INS.br&&T>INS.br&&!otDone&&!(p.bn>=(INS.brN||1))&&!p.losing){const ks=BOSS.filter(k=>!bossAlive(s,k));if(ks.length){const k=ks.includes(INS.brK||"gd")?(INS.brK||"gd"):ks[0];if(p.m>=bossCost(s)){buyBoss(s,k);return true}if(p.m>=bossCost(s)*(INS.brS||0))return true}}
+// bosses: picked for the enemy army; with INS.br it saves for one as soon as it can (boss rush)
+if(INS.boss&&(capped||T>(INS.br||540))&&T>(INS.br?Math.min(300,INS.br):300)&&!otDone){const ks=BOSS.filter(k=>!bossAlive(s,k));if(ks.length){let k=ks.includes("bt")?"bt":ks.includes("gd")?"gd":ks.includes("bz")?"bz":"bp";if(sc.air>.3&&ks.includes("bp"))k="bp";else if(sc.small>.45&&ks.includes("bt"))k="bt";
  if(p.m>=bossCost(s)){buyBoss(s,k);return true}p.saveBoss=capped&&T>420&&bossCost(s)<=3000}}
 // at full supply, keep trading the spawner with the least value per supply slot (vs what the enemy fields) for a better one
 if(INS.sw&&capped&&T-(p.swT||0)>4){p.swT=T;const val=B=>(1+Math.max(-.8,mScore(B,sc)))*B.c/B.fd*(btag(B).sup?.5:1);let worst=null,wv=1e9;
